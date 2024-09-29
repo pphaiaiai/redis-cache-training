@@ -89,81 +89,53 @@ func RedisConnection() (*redis.Client, error) {
 แก้ไข `GetProductByID` ใน struct `ProductServiceImpl` เพื่อใช้ Redis ในการ caching:
 
 ```go
-package services
-
-import (
-	"fmt"
-	"redis-cache-training/cache"
-	"redis-cache-training/internal/models"
-	"redis-cache-training/internal/repositories"
-	"redis-cache-training/logging"
-	"redis-cache-training/utils"
-	"time"
-
-	errorsConstant "redis-cache-training/errors"
-
-	"github.com/gofiber/fiber/v2"
-	"github.com/pkg/errors"
-	"github.com/redis/go-redis/v9"
-)
-
-type ProductService interface {
-	GetProductByID(c *fiber.Ctx, id int) (*models.Product, error)
-}
-
-type ProductServiceImpl struct {
-	repo repositories.ProductRepository
-}
-
-func NewProductService(repo repositories.ProductRepository) ProductService {
-	return &ProductServiceImpl{repo: repo}
-}
-
 func (s *ProductServiceImpl) GetProductByID(c *fiber.Ctx, id int) (*models.Product, error) {
-	logger := logging.Logger.With().Str("method", "GetProductByID").Logger()
+    logger := logging.Logger.With().Str("method", "GetProductByID").Logger()
 
-	connRedis, err := cache.RedisConnection()
-	if err != nil {
-		logger.Error().Stack().Err(err).Msg("Failed to connect to Redis")
-		return nil, err
-	}
-	cacheKey := fmt.Sprintf("product:%d", id)
-	ctx := c.Context()
-	var product *models.Product
+    connRedis, err := cache.RedisConnection()
+    if err != nil {
+        logger.Error().Stack().Err(err).Msg("Failed to connect to Redis")
+        return nil, err
+    }
 
-	val, err := connRedis.Get(ctx, cacheKey).Result()
-	if err == redis.Nil {
-		product, err = s.repo.GetProductByID(c, id)
-		if err != nil {
-			logger.Error().Stack().Err(err).Msg("Failed to fetch from database")
-			return product, err
-		}
+    cacheKey := fmt.Sprintf("product:%d", id)
+    ctx := c.Context()
+    var product *models.Product
 
-		jsonData, err := utils.CompressToJsonBytes(product)
-		if err != nil {
-			logger.Error().Stack().Err(err).Msg("Failed to serialize product to JSON")
-			return product, errors.Errorf(errorsConstant.ERROR_CODE_FAIL_COMPRESS_JSON)
-		}
+    val, err := connRedis.Get(ctx, cacheKey).Result()
+    if err == redis.Nil {
+        // ดึงข้อมูลจากฐานข้อมูลและแคชผลลัพธ์
+        product, err = s.repo.GetProductByID(c, id)
+        if err != nil {
+            logger.Error().Stack().Err(err).Msg("Failed to fetch from database")
+            return product, err
+        }
 
-		err = connRedis.Set(ctx, cacheKey, jsonData, 24*time.Hour).Err()
-		if err != nil {
-			logger.Error().Stack().Err(err).Msg("Failed to set product data in Redis")
-			return product, errors.Errorf(errorsConstant.ERROR_CODE_FAIL_SET_DATA_REDIS)
-		}
+        jsonData, err := utils.CompressToJsonBytes(product)
+        if err != nil {
+            logger.Error().Stack().Err(err).Msg("Failed to serialize product to JSON")
+            return product, errors.Errorf(errorsConstant.ERROR_CODE_FAIL_COMPRESS_JSON)
+        }
 
-	} else if err != nil {
-		logger.Error().Stack().Err(err).Msg("Error fetching product from Redis")
-		return product, errors.Errorf(errorsConstant.ERROR_CODE_FAIL_FETCH_REDIS)
-	} else {
-		logger.Info().Msg("Success fetching product from Redis")
-		err = utils.UnCompressJsonBytes([]byte(val), &product)
-		if err != nil {
-			logger.Error().Stack().Err(err).Msg("Failed to deserialize product from JSON")
-			return product, errors.Errorf(errorsConstant.ERROR_CODE_FAIL_UNCOMPRESS_JSON)
-		}
-	}
+        err = connRedis.Set(ctx, cacheKey, jsonData, 24*time.Hour).Err()
+        if err != nil {
+            logger.Error().Stack().Err(err).Msg("Failed to set product data in Redis")
+            return product, errors.Errorf(errorsConstant.ERROR_CODE_FAIL_SET_DATA_REDIS)
+        }
 
-	return product, nil
+    } else if err != nil {
+        logger.Error().Stack().Err(err).Msg("Error fetching product from Redis")
+        return product, errors.Errorf(errorsConstant.ERROR_CODE_FAIL_FETCH_REDIS)
+    } else {
+        logger.Info().Msg("Success fetching product from Redis")
+        err = utils.UnCompressJsonBytes([]byte(val), &product)
+        if err != nil {
+            logger.Error().Stack().Err(err).Msg("Failed to deserialize product from JSON")
+            return product, errors.Errorf(errorsConstant.ERROR_CODE_FAIL_UNCOMPRESS_JSON)
+        }
+    }
+
+    return product, nil
 }
 ```
 
