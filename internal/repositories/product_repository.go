@@ -8,7 +8,7 @@ import (
 )
 
 type ProductRepository interface {
-	GetProductByID(c *fiber.Ctx, id int) (models.Product, error)
+	GetProductByID(c *fiber.Ctx, id int) (*models.Product, error)
 }
 
 type MasterDataRepositories struct {
@@ -19,12 +19,12 @@ func NewProductRepository(db *gorm.DB) ProductRepository {
 	return &MasterDataRepositories{DB: db}
 }
 
-func (r *MasterDataRepositories) GetProductByID(c *fiber.Ctx, id int) (models.Product, error) {
+func (r *MasterDataRepositories) GetProductByID(c *fiber.Ctx, id int) (*models.Product, error) {
 	product := &models.Product{}
 
 	if err := r.DB.Table("product").First(&product, id).Error; err != nil {
-		return *product, err
+		return product, err
 	}
 
-	return *product, nil
+	return product, nil
 }

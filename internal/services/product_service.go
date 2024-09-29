@@ -8,7 +8,7 @@ import (
 )
 
 type ProductService interface {
-	GetProductByID(c *fiber.Ctx, id int) (models.Product, error)
+	GetProductByID(c *fiber.Ctx, id int) (*models.Product, error)
 }
 
 type ProductServiceImpl struct {
@@ -19,6 +19,6 @@ func NewProductService(repo repositories.ProductRepository) ProductService {
 	return &ProductServiceImpl{repo: repo}
 }
 
-func (s *ProductServiceImpl) GetProductByID(c *fiber.Ctx, id int) (models.Product, error) {
+func (s *ProductServiceImpl) GetProductByID(c *fiber.Ctx, id int) (*models.Product, error) {
 	return s.repo.GetProductByID(c, id)
 }
